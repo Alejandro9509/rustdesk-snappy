@@ -35,6 +35,13 @@ La receta actual produce paquetes `amd64`.
 
 La receta está marcada `devel` y `devmode`, por lo que está pensada para pruebas locales:
 
+En Ubuntu 26, instala y conecta el proveedor de gráficos para habilitar OpenGL:
+
+```bash
+sudo snap install mesa-2604 --channel=26/stable
+sudo snap connect rustdesk-snappy:gpu-2604 mesa-2604:gpu-2604
+```
+
 ```bash
 sudo snap install --dangerous --devmode ./rustdesk-snappy_<version>_amd64.snap
 ```

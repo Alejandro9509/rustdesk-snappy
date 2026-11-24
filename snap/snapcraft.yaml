@@ -8,10 +8,20 @@ description: |
 grade: devel
 confinement: devmode
 
+layout:
+  /usr/share/X11/XErrorDB:
+    bind-file: $SNAP/gpu-2604/usr/share/X11/XErrorDB
+
 platforms:
   amd64:
     build-on: [amd64]
     build-for: [amd64]
+
+plugs:
+  gpu-2604:
+    interface: content
+    target: $SNAP/gpu-2604
+    default-provider: mesa-2604
 
 parts:
   rustdesk:
@@ -77,6 +87,7 @@ parts:
     stage-packages:
       - libgtk-3-0t64
       - libayatana-appindicator3-1
+      - hicolor-icon-theme
       - libxdo3
       - libxfixes3
       - libxcb-randr0
@@ -86,9 +97,6 @@ parts:
       - libpulse0
       - libgstreamer1.0-0
       - libgstreamer-plugins-base1.0-0
-      - libva2
-      - libva-drm2
-      - libva-x11-2
       - libdrm2
       - libwayland-client0
       - libxkbcommon0
@@ -177,6 +185,7 @@ parts:
       install -d "$SNAPCRAFT_PART_INSTALL/bin"
       cat > "$SNAPCRAFT_PART_INSTALL/bin/rustdesk" <<'EOF'
       #!/bin/sh
+      export LD_LIBRARY_PATH="$SNAP/usr/lib/x86_64-linux-gnu/pulseaudio${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
       cd "$SNAP/usr/share/rustdesk"
       exec "$SNAP/usr/share/rustdesk/rustdesk" "$@"
       EOF
@@ -198,19 +207,32 @@ parts:
       install -m 0644 res/128x128@2x.png \
         "$SNAPCRAFT_PART_INSTALL/usr/share/icons/hicolor/256x256/apps/rustdesk.png"
 
+  gpu-2604:
+    after: [rustdesk]
+    plugin: dump
+    source: https://github.com/canonical/gpu-snap.git
+    source-branch: main
+    source-depth: 1
+    override-prime: |
+      craftctl default
+      "$CRAFT_PART_SRC/bin/gpu-2604-cleanup" mesa-2604
+    prime:
+      - bin/gpu-2604-wrapper
+
 apps:
   rustdesk:
+    command-chain:
+      - bin/gpu-2604-wrapper
     command: bin/rustdesk
     desktop: usr/share/applications/rustdesk.desktop
     plugs:
       - desktop
-      - desktop-legacy
+      - gpu-2604
       - home
       - network
       - network-bind
       - audio-playback
       - audio-record
-      - opengl
       - x11
       - wayland
       - hardware-observe
