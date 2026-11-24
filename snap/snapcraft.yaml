@@ -117,6 +117,7 @@ parts:
       sh "$SNAPCRAFT_PART_BUILD/rustup-init.sh" -y \
         --default-toolchain "$rust_version" --profile minimal
       . "$HOME/.cargo/env"
+      rustup component add rustfmt --toolchain "$rust_version"
 
       cargo install cargo-expand --version "$cargo_expand_version" --locked
       cargo install flutter_rust_bridge_codegen \
@@ -130,6 +131,8 @@ parts:
       tar -xf "$SNAPCRAFT_PART_BUILD/flutter-codegen.tar.xz" \
         -C "$SNAPCRAFT_PART_BUILD"
       mv "$SNAPCRAFT_PART_BUILD/flutter" \
+        "$SNAPCRAFT_PART_BUILD/flutter-${bridge_flutter_version}"
+      git config --global --add safe.directory \
         "$SNAPCRAFT_PART_BUILD/flutter-${bridge_flutter_version}"
 
       cp flutter/pubspec.yaml "$SNAPCRAFT_PART_BUILD/pubspec.yaml"
@@ -150,7 +153,12 @@ parts:
       curl -fsSL "https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_${flutter_version}-stable.tar.xz" \
         -o "$SNAPCRAFT_PART_BUILD/flutter.tar.xz"
       tar -xf "$SNAPCRAFT_PART_BUILD/flutter.tar.xz" -C "$SNAPCRAFT_PART_BUILD"
+      git config --global --add safe.directory "$SNAPCRAFT_PART_BUILD/flutter"
       export PATH="$SNAPCRAFT_PART_BUILD/flutter/bin:$SNAPCRAFT_PART_BUILD/flutter-${bridge_flutter_version}/bin:$HOME/.cargo/bin:$PATH"
+      # Use the Flutter 3.24-compatible dependency after bridge codegen.
+      sed -i -e 's/extended_text: 13.0.0/extended_text: 14.0.0/' \
+        flutter/pubspec.yaml
+      (cd flutter && flutter pub get)
       flutter precache --linux
 
       export VCPKG_ROOT="$SNAPCRAFT_PART_BUILD/vcpkg"
