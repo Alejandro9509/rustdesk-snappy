@@ -1,0 +1,176 @@
+name: rustdesk-snappy
+base: core26
+adopt-info: rustdesk
+summary: Remote desktop software
+description: |
+  RustDesk is a remote desktop application. This development snap builds the
+  Flutter Linux client from the official RustDesk repository.
+grade: devel
+confinement: devmode
+
+platforms:
+  amd64:
+    build-on: [amd64]
+    build-for: [amd64]
+
+parts:
+  rustdesk:
+    plugin: nil
+    source: https://github.com/rustdesk/rustdesk.git
+    source-type: git
+    source-branch: master
+    source-depth: 1
+    source-submodules:
+      - libs/hbb_common
+    override-pull: |
+      craftctl default
+      version="$(python3 -c 'import re,sys; s=open(sys.argv[1]).read(); m=re.search(r"(?ms)^\[package\]\s*.*?^version\s*=\s*\"([^\"]+)\"", s); print(m.group(1) if m else "")' "$SNAPCRAFT_PART_SRC/Cargo.toml")"
+      if [ -z "$version" ]; then
+        echo "Could not read the RustDesk version from Cargo.toml" >&2
+        exit 1
+      fi
+      craftctl set version="$version"
+    build-packages:
+      - zip
+      - g++
+      - gcc
+      - git
+      - curl
+      - wget
+      - nasm
+      - yasm
+      - libgtk-3-dev
+      - clang
+      - libxcb-randr0-dev
+      - libxdo-dev
+      - libxfixes-dev
+      - libxcb-shape0-dev
+      - libxcb-xfixes0-dev
+      - libasound2-dev
+      - libpulse-dev
+      - cmake
+      - make
+      - libclang-dev
+      - ninja-build
+      - libgstreamer1.0-dev
+      - libgstreamer-plugins-base1.0-dev
+      - build-essential
+      - pkg-config
+      - python3
+      - python3-pip
+      - ca-certificates
+      - unzip
+      - xz-utils
+      - libayatana-appindicator3-dev
+      - libva-dev
+      - libdrm-dev
+      - libwayland-dev
+      - wayland-protocols
+      - libxkbcommon-dev
+      - libsystemd-dev
+      - libunwind-dev
+      - llvm-dev
+      - autoconf
+      - automake
+      - libtool
+    stage-packages:
+      - libgtk-3-0t64
+      - libayatana-appindicator3-1
+      - libxdo3
+      - libxfixes3
+      - libxcb-randr0
+      - libxcb-shape0
+      - libxcb-xfixes0
+      - libasound2t64
+      - libpulse0
+      - libgstreamer1.0-0
+      - libgstreamer-plugins-base1.0-0
+      - libva2
+      - libva-drm2
+      - libva-x11-2
+      - libdrm2
+      - libwayland-client0
+      - libxkbcommon0
+      - libdbus-1-3
+      - libsystemd0
+      - curl
+    override-build: |
+      set -eu
+      cd "$SNAPCRAFT_PART_SRC"
+
+      rust_version=1.75.0
+      flutter_version=3.24.5
+      cmake_version=4.3.0
+
+      curl -fsSL "https://github.com/Kitware/CMake/releases/download/v${cmake_version}/cmake-${cmake_version}-linux-x86_64.tar.gz" \
+        -o "$SNAPCRAFT_PART_BUILD/cmake.tar.gz"
+      tar -xzf "$SNAPCRAFT_PART_BUILD/cmake.tar.gz" -C "$SNAPCRAFT_PART_BUILD"
+      export PATH="$SNAPCRAFT_PART_BUILD/cmake-${cmake_version}-linux-x86_64/bin:$PATH"
+
+      curl --proto '=https' --tlsv1.2 -fsSL https://sh.rustup.rs \
+        -o "$SNAPCRAFT_PART_BUILD/rustup-init.sh"
+      sh "$SNAPCRAFT_PART_BUILD/rustup-init.sh" -y \
+        --default-toolchain "$rust_version" --profile minimal
+      . "$HOME/.cargo/env"
+
+      curl -fsSL "https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_${flutter_version}-stable.tar.xz" \
+        -o "$SNAPCRAFT_PART_BUILD/flutter.tar.xz"
+      tar -xf "$SNAPCRAFT_PART_BUILD/flutter.tar.xz" -C "$SNAPCRAFT_PART_BUILD"
+      export PATH="$SNAPCRAFT_PART_BUILD/flutter/bin:$PATH"
+      flutter precache --linux
+
+      export VCPKG_ROOT="$SNAPCRAFT_PART_BUILD/vcpkg"
+      export VCPKG_FORCE_SYSTEM_BINARIES=1
+      vcpkg_baseline="$(python3 -c 'import json; print(json.load(open("vcpkg.json"))["vcpkg-configuration"]["default-registry"]["baseline"])')"
+      git clone https://github.com/microsoft/vcpkg.git "$VCPKG_ROOT"
+      git -C "$VCPKG_ROOT" checkout --detach "$vcpkg_baseline"
+      "$VCPKG_ROOT/bootstrap-vcpkg.sh" -disableMetrics
+      "$VCPKG_ROOT/vcpkg" install --x-install-root="$VCPKG_ROOT/installed"
+
+      ./build.py --flutter --no-drm
+
+      install -d "$SNAPCRAFT_PART_INSTALL/usr/share/rustdesk"
+      cp -a flutter/build/linux/x64/release/bundle/. \
+        "$SNAPCRAFT_PART_INSTALL/usr/share/rustdesk/"
+      install -d "$SNAPCRAFT_PART_INSTALL/bin"
+      cat > "$SNAPCRAFT_PART_INSTALL/bin/rustdesk" <<'EOF'
+      #!/bin/sh
+      cd "$SNAP/usr/share/rustdesk"
+      exec "$SNAP/usr/share/rustdesk/rustdesk" "$@"
+      EOF
+      chmod 0755 "$SNAPCRAFT_PART_INSTALL/bin/rustdesk"
+
+      install -d "$SNAPCRAFT_PART_INSTALL/usr/share/applications"
+      cat > "$SNAPCRAFT_PART_INSTALL/usr/share/applications/rustdesk.desktop" <<'EOF'
+      [Desktop Entry]
+      Name=RustDesk
+      Comment=Remote desktop software
+      Exec=rustdesk
+      Icon=rustdesk
+      Terminal=false
+      Type=Application
+      Categories=Network;RemoteAccess;
+      StartupWMClass=rustdesk
+      EOF
+      install -d "$SNAPCRAFT_PART_INSTALL/usr/share/icons/hicolor/256x256/apps"
+      install -m 0644 res/128x128@2x.png \
+        "$SNAPCRAFT_PART_INSTALL/usr/share/icons/hicolor/256x256/apps/rustdesk.png"
+
+apps:
+  rustdesk:
+    command: bin/rustdesk
+    desktop: usr/share/applications/rustdesk.desktop
+    plugs:
+      - desktop
+      - desktop-legacy
+      - home
+      - network
+      - network-bind
+      - audio-playback
+      - audio-record
+      - opengl
+      - x11
+      - wayland
+      - hardware-observe
+      - raw-input
+      - uinput
