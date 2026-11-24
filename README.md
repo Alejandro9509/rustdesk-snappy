@@ -9,9 +9,10 @@ Aunque la guía de RustDesk incluye dependencias para Ubuntu 18, Snapcraft 9.2.1
 admite `core18` como entorno de compilación. Por eso esta receta adapta las dependencias
 al entorno `core26`; no compila sobre Ubuntu 18.
 
-La receta sigue la rama `master` de RustDesk. Fija Rust 1.75.0, Flutter 3.24.5 y lee
-la versión de RustDesk desde su `Cargo.toml`. Por eso el paquete puede cambiar al
-reconstruirse, aunque no cambie este proyecto.
+La receta sigue la rama `master` de RustDesk. Fija Rust 1.75.0, Flutter 3.24.5,
+Flutter Rust Bridge 1.80.1 y lee la versión de RustDesk desde su `Cargo.toml`. Genera
+los archivos bridge antes de compilar; por eso el paquete puede cambiar al reconstruirse,
+aunque no cambie este proyecto.
 
 ## Compilar
 

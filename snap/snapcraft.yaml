@@ -102,6 +102,9 @@ parts:
 
       rust_version=1.75.0
       flutter_version=3.24.5
+      bridge_flutter_version=3.22.3
+      bridge_codegen_version=1.80.1
+      cargo_expand_version=1.0.95
       cmake_version=4.3.0
 
       curl -fsSL "https://github.com/Kitware/CMake/releases/download/v${cmake_version}/cmake-${cmake_version}-linux-x86_64.tar.gz" \
@@ -115,10 +118,39 @@ parts:
         --default-toolchain "$rust_version" --profile minimal
       . "$HOME/.cargo/env"
 
+      cargo install cargo-expand --version "$cargo_expand_version" --locked
+      cargo install flutter_rust_bridge_codegen \
+        --version "$bridge_codegen_version" --features uuid --locked
+
+      # The pinned rust-webm source uses fixed-width integers without including cstdint.
+      export CXXFLAGS="${CXXFLAGS:+$CXXFLAGS }-include cstdint"
+
+      curl -fsSL "https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_${bridge_flutter_version}-stable.tar.xz" \
+        -o "$SNAPCRAFT_PART_BUILD/flutter-codegen.tar.xz"
+      tar -xf "$SNAPCRAFT_PART_BUILD/flutter-codegen.tar.xz" \
+        -C "$SNAPCRAFT_PART_BUILD"
+      mv "$SNAPCRAFT_PART_BUILD/flutter" \
+        "$SNAPCRAFT_PART_BUILD/flutter-${bridge_flutter_version}"
+
+      cp flutter/pubspec.yaml "$SNAPCRAFT_PART_BUILD/pubspec.yaml"
+      cp flutter/pubspec.lock "$SNAPCRAFT_PART_BUILD/pubspec.lock"
+      export PATH="$SNAPCRAFT_PART_BUILD/flutter-${bridge_flutter_version}/bin:$PATH"
+      sed -i -e 's/extended_text: 14.0.0/extended_text: 13.0.0/g' \
+        flutter/pubspec.yaml
+      (cd flutter && flutter pub get)
+      "$HOME/.cargo/bin/flutter_rust_bridge_codegen" \
+        --rust-input ./src/flutter_ffi.rs \
+        --dart-output ./flutter/lib/generated_bridge.dart \
+        --c-output ./flutter/macos/Runner/bridge_generated.h
+      cp ./flutter/macos/Runner/bridge_generated.h \
+        ./flutter/ios/Runner/bridge_generated.h
+      cp "$SNAPCRAFT_PART_BUILD/pubspec.yaml" flutter/pubspec.yaml
+      cp "$SNAPCRAFT_PART_BUILD/pubspec.lock" flutter/pubspec.lock
+
       curl -fsSL "https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_${flutter_version}-stable.tar.xz" \
         -o "$SNAPCRAFT_PART_BUILD/flutter.tar.xz"
       tar -xf "$SNAPCRAFT_PART_BUILD/flutter.tar.xz" -C "$SNAPCRAFT_PART_BUILD"
-      export PATH="$SNAPCRAFT_PART_BUILD/flutter/bin:$PATH"
+      export PATH="$SNAPCRAFT_PART_BUILD/flutter/bin:$SNAPCRAFT_PART_BUILD/flutter-${bridge_flutter_version}/bin:$HOME/.cargo/bin:$PATH"
       flutter precache --linux
 
       export VCPKG_ROOT="$SNAPCRAFT_PART_BUILD/vcpkg"
