@@ -1,12 +1,12 @@
 name: rustdesk-snappy
 base: core26
 adopt-info: rustdesk
-summary: Remote desktop software
+summary: Remote desktop application
 description: |
-  RustDesk is a remote desktop application. This development snap builds the
-  Flutter Linux client from the official RustDesk repository.
-grade: devel
-confinement: devmode
+  RustDesk is a remote desktop application. This snap packages the Flutter
+  Linux client from the official RustDesk repository.
+grade: stable
+confinement: strict
 
 layout:
   /usr/share/X11/XErrorDB:
